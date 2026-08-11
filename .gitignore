@@ -1,0 +1,6 @@
+*.bin
+venv/
+*.log
+.DS_Store
+*.mp4
+*.srt
