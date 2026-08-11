@@ -245,6 +245,18 @@
   </section>
 
   <section>
+    <h2>Tell me what you think</h2>
+    <div class="maker" style="align-items:flex-start">
+      <div style="font-size:2rem; line-height:1">💬</div>
+      <div>
+        <div class="d" style="margin-bottom:14px">Did it work for you? Found a problem? Want a feature?
+        I read every message — your feedback decides what I build next.</div>
+        <a class="btn" style="margin-top:0" href="mailto:seyitope@citedi.mx?subject=Auto%20Caption%20feedback">📧 Send feedback</a>
+      </div>
+    </div>
+  </section>
+
+  <section>
     <div class="maker">
       <img src="me.jpg" alt="Setopy, the maker of Auto Caption">
       <div>
@@ -486,11 +498,13 @@ window.processFile = async function processFile(file) {
     dl.href = outUrl; dl.download = `${stem} (captioned).${ext}`;
     dl.classList.remove("hidden");
     $("again").classList.remove("hidden");
+    if (window.goatcounter) goatcounter.count({ path: "video-captioned", title: "Video captioned", event: true });
   } catch (err) {
     console.error(err);
     fail("Something went wrong: " + (err.message || err) + " — try Chrome on a computer, or use the free Mac app linked below.");
   }
 };
 </script>
+<script data-goatcounter="https://setopy.goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>
 </body>
 </html>
