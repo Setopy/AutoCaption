@@ -45,7 +45,7 @@
 
   /* ---------- hero ---------- */
   .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; letter-spacing: -.02em; margin-bottom: 40px; }
-  .brand .logo { width: 34px; height: 34px; border-radius: 9px; background: var(--yellow); display: grid; place-items: center; font-size: 19px; }
+  .brand .logo { width: 38px; height: 38px; border-radius: 50%; object-fit: cover; border: 2px solid var(--yellow); }
   h1 {
     font-size: clamp(2.1rem, 6vw, 3.3rem); font-weight: 900; letter-spacing: -.03em;
     line-height: 1.08; margin-bottom: 18px;
@@ -188,7 +188,7 @@
 <body>
 <div class="glow a"></div><div class="glow b"></div>
 <main>
-  <div class="brand"><span class="logo">💬</span> Auto Caption</div>
+  <div class="brand"><img class="logo" src="me.jpg" alt="Setopy"> Auto Caption</div>
 
   <h1>Captions that <em>pop</em>,<br>word by word. Free.</h1>
   <div class="demo" id="demo" aria-hidden="true"></div>
