@@ -163,6 +163,21 @@
   details[open] summary::after { transform: rotate(45deg); }
   details p { padding: 0 18px 16px; color: var(--muted); font-size: .9rem; line-height: 1.65; }
 
+  /* ---------- maker ---------- */
+  .maker {
+    display: flex; align-items: center; gap: 20px;
+    background: var(--card); border: 1px solid var(--card-border); border-radius: var(--radius);
+    padding: 24px;
+  }
+  .maker img {
+    width: 84px; height: 84px; border-radius: 50%; object-fit: cover; flex: none;
+    border: 3px solid var(--yellow);
+  }
+  .maker .t { font-weight: 700; margin-bottom: 5px; }
+  .maker .d { color: var(--muted); font-size: .9rem; line-height: 1.6; }
+  .maker .d a { color: var(--text); }
+  @media (max-width: 480px) { .maker { flex-direction: column; text-align: center; } }
+
   footer {
     padding: 44px 20px 36px; color: var(--faint); font-size: .85rem; text-align: center;
     line-height: 1.8; position: relative; z-index: 1;
@@ -227,6 +242,19 @@
     <details><summary>Why does it want Chrome on a computer?</summary><p>The captioning uses modern browser features that work most reliably in Chrome or Edge on a laptop or desktop. Keep the tab visible while it renders — it processes in real time, so a 1-minute video takes about a minute.</p></details>
     <details><summary>What if it hears a word wrong?</summary><p>Speech recognition isn't perfect, especially with names or heavy background noise. For maximum accuracy there's a free Mac app version that uses a bigger model — grab it from the GitHub link below.</p></details>
     <details><summary>What languages does it support?</summary><p>It auto-detects the spoken language and supports dozens of languages.</p></details>
+  </section>
+
+  <section>
+    <div class="maker">
+      <img src="me.jpg" alt="Setopy, the maker of Auto Caption">
+      <div>
+        <div class="t">Hi, I'm Setopy 👋</div>
+        <div class="d">I built Auto Caption so anyone can add great-looking captions to their videos
+        without paying for subscriptions. It's free and always will be — if it helped you,
+        share it with someone! The whole project is open source on
+        <a href="https://github.com/Setopy/AutoCaption">GitHub</a>.</div>
+      </div>
+    </div>
   </section>
 </main>
 
