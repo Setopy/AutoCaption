@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Auto Caption — free word-by-word video captions</title>
+<meta name="description" content="Add CapCut-style word-by-word pop-in captions to any video, free. Runs entirely in your browser — no upload, no account, no watermark.">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    background: #0f1117; color: #e8eaf0; min-height: 100vh;
+    display: flex; flex-direction: column; align-items: center;
+  }
+  main { width: 100%; max-width: 640px; padding: 40px 20px 60px; }
+  h1 { font-size: 2rem; margin-bottom: 8px; }
+  h1 .word { color: #ffd600; }
+  .tag { color: #9aa1b5; margin-bottom: 28px; line-height: 1.5; }
+  .drop {
+    border: 2px dashed #3a4056; border-radius: 16px; padding: 48px 24px;
+    text-align: center; cursor: pointer; transition: border-color .2s, background .2s;
+    background: #161a24;
+  }
+  .drop:hover, .drop.over { border-color: #ffd600; background: #1a1f2e; }
+  .drop .big { font-size: 1.15rem; font-weight: 600; margin-bottom: 6px; }
+  .drop .small { color: #9aa1b5; font-size: .9rem; }
+  .hidden { display: none !important; }
+  .panel { margin-top: 24px; background: #161a24; border-radius: 16px; padding: 24px; }
+  .stage { display: flex; align-items: center; gap: 10px; padding: 6px 0; color: #9aa1b5; }
+  .stage.active { color: #e8eaf0; }
+  .stage.done { color: #6ee7a0; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: #3a4056; flex: none; }
+  .stage.active .dot { background: #ffd600; animation: pulse 1s infinite; }
+  .stage.done .dot { background: #6ee7a0; }
+  @keyframes pulse { 50% { opacity: .4; } }
+  .bar { height: 6px; background: #232838; border-radius: 3px; margin-top: 14px; overflow: hidden; }
+  .bar > div { height: 100%; width: 0%; background: #ffd600; border-radius: 3px; transition: width .3s; }
+  .note { margin-top: 12px; font-size: .85rem; color: #9aa1b5; line-height: 1.5; }
+  video, canvas.preview { width: 100%; border-radius: 12px; margin-top: 16px; background: #000; }
+  .btn {
+    display: inline-block; margin-top: 16px; padding: 14px 28px; border-radius: 12px;
+    background: #ffd600; color: #14161d; font-weight: 700; text-decoration: none;
+    border: none; font-size: 1rem; cursor: pointer;
+  }
+  .btn.secondary { background: #232838; color: #e8eaf0; font-weight: 600; }
+  .error { margin-top: 16px; color: #ff7b72; line-height: 1.5; }
+  footer { padding: 24px; color: #6b7185; font-size: .85rem; text-align: center; line-height: 1.7; }
+  footer a { color: #9aa1b5; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Auto <span class="word">Caption</span></h1>
+  <p class="tag">Free word-by-word pop-in captions for any video, CapCut-style.<br>
+  Runs 100% in your browser — your video is never uploaded anywhere. No account, no watermark.</p>
+
+  <div class="drop" id="drop">
+    <div class="big">Drop a video here</div>
+    <div class="small">or click to choose a file · works best in Chrome on a computer</div>
+    <input type="file" id="file" accept="video/*" class="hidden">
+  </div>
+
+  <div class="panel hidden" id="panel">
+    <div class="stage" id="st-model"><span class="dot"></span><span>Loading speech recognition (one-time download, cached after)</span></div>
+    <div class="stage" id="st-audio"><span class="dot"></span><span>Reading audio</span></div>
+    <div class="stage" id="st-trans"><span class="dot"></span><span>Transcribing speech</span></div>
+    <div class="stage" id="st-render"><span class="dot"></span><span>Burning captions into the video</span></div>
+    <div class="bar"><div id="barfill"></div></div>
+    <div class="note" id="status"></div>
+    <div class="error hidden" id="error"></div>
+    <video id="result" class="hidden" controls playsinline></video>
+    <a class="btn hidden" id="download">Download captioned video</a>
+    <button class="btn secondary hidden" id="again">Caption another video</button>
+  </div>
+</main>
+
+<footer>
+  Prefer a drag-and-drop Mac app that does the same thing offline?<br>
+  Get it free at <a href="https://github.com/Setopy/AutoCaption">github.com/Setopy/AutoCaption</a>
+</footer>
+
+<script type="module">
+const MAX_WORDS = 4, GAP_BREAK = 0.7, YELLOW = "#ffd600", WHITE = "#ffffff";
+
+const $ = id => document.getElementById(id);
+const drop = $("drop"), fileInput = $("file"), panel = $("panel");
+const stages = { model: $("st-model"), audio: $("st-audio"), trans: $("st-trans"), render: $("st-render") };
+
+let transcriber = null;
+
+function setStage(name, state) { stages[name].className = "stage " + state; }
+function setBar(p) { $("barfill").style.width = Math.min(100, Math.round(p)) + "%"; }
+function setStatus(t) { $("status").textContent = t; }
+function fail(msg) {
+  $("error").textContent = msg;
+  $("error").classList.remove("hidden");
+  $("again").classList.remove("hidden");
+}
+
+drop.addEventListener("click", () => fileInput.click());
+drop.addEventListener("dragover", e => { e.preventDefault(); drop.classList.add("over"); });
+drop.addEventListener("dragleave", () => drop.classList.remove("over"));
+drop.addEventListener("drop", e => {
+  e.preventDefault(); drop.classList.remove("over");
+  if (e.dataTransfer.files[0]) processFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener("change", () => { if (fileInput.files[0]) processFile(fileInput.files[0]); });
+$("again").addEventListener("click", () => location.reload());
+
+async function loadModel() {
+  if (transcriber) return;
+  setStage("model", "active");
+  const { pipeline } = await import("https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.7.6/+esm");
+  const progress_callback = d => {
+    if (d.status === "progress" && d.file && d.file.endsWith(".onnx")) {
+      setBar(d.progress || 0);
+      setStatus(`Downloading speech model… ${Math.round(d.progress || 0)}%`);
+    }
+  };
+  transcriber = await pipeline("automatic-speech-recognition", "onnx-community/whisper-base_timestamped", { dtype: "q8", progress_callback });
+  setStage("model", "done"); setBar(0); setStatus("");
+}
+
+async function extractAudio(file) {
+  setStage("audio", "active");
+  const buf = await file.arrayBuffer();
+  const actx = new AudioContext();
+  const decoded = await actx.decodeAudioData(buf.slice(0));
+  actx.close();
+  const off = new OfflineAudioContext(1, Math.ceil(decoded.duration * 16000), 16000);
+  const src = off.createBufferSource();
+  src.buffer = decoded; src.connect(off.destination); src.start();
+  const rendered = await off.startRendering();
+  setStage("audio", "done");
+  return rendered.getChannelData(0);
+}
+
+function chunkWords(words) {
+  const chunks = []; let cur = [];
+  for (const w of words) {
+    if (cur.length) {
+      const gap = w.start - cur[cur.length - 1].end;
+      const ended = /[.!?]["”]?$/.test(cur[cur.length - 1].text);
+      if (cur.length >= MAX_WORDS || gap > GAP_BREAK || ended) { chunks.push(cur); cur = []; }
+    }
+    cur.push(w);
+  }
+  if (cur.length) chunks.push(cur);
+  return chunks;
+}
+
+async function transcribe(audio) {
+  setStage("trans", "active");
+  setStatus("Transcribing… this can take a minute for longer videos.");
+  const out = await transcriber(audio, { return_timestamps: "word", chunk_length_s: 30, stride_length_s: 5 });
+  const words = (out.chunks || [])
+    .filter(c => c.text.trim() && c.timestamp[0] != null)
+    .map(c => ({ text: c.text.trim(), start: c.timestamp[0], end: c.timestamp[1] ?? c.timestamp[0] + 0.3 }));
+  if (!words.length) throw new Error("No speech was detected in this video.");
+  setStage("trans", "done"); setStatus("");
+  return chunkWords(words);
+}
+
+function captionAt(chunks, t) {
+  for (const chunk of chunks) {
+    const start = chunk[0].start, end = chunk[chunk.length - 1].end + 0.12;
+    if (t >= start && t <= end) {
+      let idx = 0;
+      for (let i = 0; i < chunk.length; i++) if (t >= chunk[i].start) idx = i;
+      return { tokens: chunk.map(w => w.text), idx };
+    }
+  }
+  return null;
+}
+
+async function renderVideo(file, chunks) {
+  setStage("render", "active");
+  const url = URL.createObjectURL(file);
+  const video = document.createElement("video");
+  video.src = url; video.muted = true; video.playsInline = true;
+  await new Promise((res, rej) => { video.onloadedmetadata = res; video.onerror = () => rej(new Error("Could not read this video file.")); });
+
+  const W = video.videoWidth, H = video.videoHeight;
+  const canvas = document.createElement("canvas");
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext("2d");
+
+  const fsize = Math.max(20, Math.round(Math.min(W, H * 0.56) / 13));
+  const lh = Math.round(fsize * 1.3);
+  const marginBottom = Math.round(H * 0.10);
+  const maxW = W - 2 * Math.round(W * 0.04);
+  ctx.font = `bold ${fsize}px Arial, sans-serif`;
+
+  function layout(tokens) {
+    const spaceW = ctx.measureText(" ").width;
+    const lines = []; let cur = [], curW = 0;
+    tokens.forEach((tok, idx) => {
+      const tw = ctx.measureText(tok).width;
+      const add = cur.length ? curW + spaceW + tw : tw;
+      if (cur.length && add > maxW) { lines.push({ cur, curW }); cur = [{ idx, tw }]; curW = tw; }
+      else { cur.push({ idx, tw }); curW = add; }
+    });
+    if (cur.length) lines.push({ cur, curW });
+    const placed = {};
+    let y = H - marginBottom - lines.length * lh;
+    for (const { cur: line, curW: width } of lines) {
+      let x = (W - width) / 2;
+      for (const { idx, tw } of line) { placed[idx] = { x, y }; x += tw + ctx.measureText(" ").width; }
+      y += lh;
+    }
+    return placed;
+  }
+
+  const actx = new AudioContext();
+  const asrc = actx.createMediaElementSource(video);
+  const dest = actx.createMediaStreamDestination();
+  asrc.connect(dest);
+
+  const stream = canvas.captureStream(30);
+  dest.stream.getAudioTracks().forEach(t => stream.addTrack(t));
+
+  const mime = ["video/mp4;codecs=avc1,mp4a.40.2", "video/mp4", "video/webm;codecs=vp9,opus", "video/webm"]
+    .find(m => MediaRecorder.isTypeSupported(m));
+  if (!mime) throw new Error("This browser cannot record video. Try Chrome on a computer.");
+  const recorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 10_000_000 });
+  const parts = [];
+  recorder.ondataavailable = e => { if (e.data.size) parts.push(e.data); };
+
+  canvas.className = "preview";
+  $("status").after(canvas);
+  let raf, interval;
+  function draw() {
+    if (video.readyState < 2) return;
+    ctx.drawImage(video, 0, 0, W, H);
+    const cap = captionAt(chunks, video.currentTime);
+    if (cap) {
+      ctx.font = `bold ${fsize}px Arial, sans-serif`;
+      ctx.textBaseline = "top";
+      ctx.lineJoin = "round";
+      ctx.lineWidth = Math.max(4, Math.round(fsize / 4.5));
+      ctx.strokeStyle = "black";
+      const placed = layout(cap.tokens);
+      for (let j = 0; j <= cap.idx; j++) {
+        const { x, y } = placed[j];
+        ctx.strokeText(cap.tokens[j], x, y);
+        ctx.fillStyle = j === cap.idx ? YELLOW : WHITE;
+        ctx.fillText(cap.tokens[j], x, y);
+      }
+    }
+    setBar(video.duration ? (video.currentTime / video.duration) * 100 : 0);
+  }
+  function loop() { draw(); raf = requestAnimationFrame(loop); }
+
+  setStatus("Rendering in real time — this takes as long as the video is. Keep this tab open and visible.");
+  recorder.start(1000);
+  await video.play();
+  loop();
+  interval = setInterval(draw, 33);
+
+  await new Promise(res => { video.onended = res; });
+  cancelAnimationFrame(raf); clearInterval(interval);
+  draw();
+  await new Promise(res => { recorder.onstop = res; recorder.stop(); });
+  actx.close(); URL.revokeObjectURL(url); canvas.remove();
+
+  const blob = new Blob(parts, { type: mime.split(";")[0] });
+  const ext = mime.includes("mp4") ? "mp4" : "webm";
+  setStage("render", "done"); setBar(100); setStatus("Done!");
+  return { blob, ext };
+}
+
+window.processFile = async function processFile(file) {
+  drop.classList.add("hidden");
+  panel.classList.remove("hidden");
+  try {
+    await loadModel();
+    const audio = await extractAudio(file);
+    const chunks = await transcribe(audio);
+    const { blob, ext } = await renderVideo(file, chunks);
+    const outUrl = URL.createObjectURL(blob);
+    const result = $("result");
+    result.src = outUrl; result.classList.remove("hidden");
+    const stem = file.name.replace(/\.[^.]+$/, "");
+    const dl = $("download");
+    dl.href = outUrl; dl.download = `${stem} (captioned).${ext}`;
+    dl.classList.remove("hidden");
+    $("again").classList.remove("hidden");
+  } catch (err) {
+    console.error(err);
+    fail("Something went wrong: " + (err.message || err) + " — try Chrome on a computer, or use the free Mac app below.");
+  }
+};
+</script>
+</body>
+</html>
