@@ -2,6 +2,9 @@
 
 Drag a video onto the app — get it back with **word-by-word pop-in captions** burned in, CapCut-style, for free.
 
+**Try it right now in your browser — nothing to install:**
+### 👉 [setopy.github.io/AutoCaption](https://setopy.github.io/AutoCaption/)
+
 Each word pops onto the screen at the exact moment it's spoken. The word being said is highlighted in yellow, the rest are white with a black outline, so captions stay readable over any background.
 
 - 100% free and runs **entirely on your Mac** — no uploads, no accounts, no subscriptions
